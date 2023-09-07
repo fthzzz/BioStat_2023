@@ -46,9 +46,11 @@ install.packages('psych')
 ```
 # 4
 ```{r}
-setwd('/Users/user/Desktop/GitHub')
-read_tsv('data_tsv.tsv')
-write.csv('data_tsv.tsv')
+setwd('/Users/user/Desktop/BioStat_2023/GitHub')
+df<-readr::read_tsv('/Users/user/Desktop/BioStat_2023/GitHub/data_tsv.tsv')
+df
+write_tsv('data_tsv.tsv', '/Users/user/Desktop/BioStat_2023/GitHub')
+
 ```
 # 5
 ```{r}

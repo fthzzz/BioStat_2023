@@ -126,21 +126,43 @@ round(sd(df$Гемоглобин_E2)/sqrt(length(df$Гемоглобин_E2)),di
 
 ```
 ```{r}
-demodata <-read_rds('factor_data.rds')
-View(demodata)
+setwd('/Users/user/Desktop/BioStat_2023/GitHub')
+readRDS('factor_data.rds')
 ```
 
 ```{r}
-data <- read_rds('factor_data.rds')
+data <- readRDS('factor_data.rds')
 table(data$Группа,data$Пол,data$`Группа крови`,useNA = "always")
 prop.table(table(data$Группа,data$Пол,data$`Группа крови`,useNA = "always"))
 
-кажется, что-то тут не так...
+##кажется, что-то тут не так...
+```
+
+# 6
+```{r}
+str(data)
+  
 ```
 ```{r}
-
+data$Пол
 ```
-# 6
+```{r}
+tibble::tibble(`var 1` = 1:10, `var 2` = `var 1` * 100)
+```
+```{r}
+View(data)
+```
+```{r}
+setwd('/Users/user/Desktop/BioStat_2023/GitHub')
+df<-readr::read_tsv('/Users/user/Desktop/BioStat_2023/GitHub/data_tsv.tsv')
+df
+```
+```{r}
+df %>%
+  select.list('Группа')
+```
+
+
 
 
 

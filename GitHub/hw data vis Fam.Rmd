@@ -32,7 +32,6 @@ head(insurance_cost)
 insurance_cost %>%
   glimpse()
 ```
-# Задание 2 Выведите гистограммы всех нумерических переменных.
 ```{r}
 insurance_cost %>%
   select(where(is.numeric)) %>%

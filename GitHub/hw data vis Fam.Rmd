@@ -1,0 +1,193 @@
+---
+title: "HW 1_ Fam_data vis"
+output: html_document
+date: "2023-11-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(openxlsx)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(nortest)
+library(skimr)
+library(flextable)
+library(ggbeeswarm)
+
+```
+
+```{r}
+insurance_cost <- read_csv("insurance_cost.csv")
+View(insurance_cost)
+head(insurance_cost)
+```
+
+```{r}
+insurance_cost %>%
+  glimpse()
+```
+# Задание 2 Выведите гистограммы всех нумерических переменных.
+```{r}
+insurance_cost %>%
+  select(where(is.numeric)) %>%
+  names() -> n
+
+
+graphs <- lapply(n,
+          function(x){
+          insurance_cost %>%
+          ggplot() +
+          geom_histogram(aes(x = insurance_cost[[x]]),
+          color = "black", fill = "pink") +
+          theme_bw() +
+          ggtitle(x) +
+          xlab("values")
+         })
+plot <- ggarrange(plotlist = graphs, nrow = 1, ncol = 1)
+
+plot
+```
+
+```{r}
+charges_mean <- round(mean(insurance_cost$charges),1)
+charges_median <- round(median(insurance_cost$charges),1)
+
+insurance_cost %>%
+  ggplot( aes(x=charges)) +
+    geom_density(fill="lightblue", color="darkblue", alpha=0.8) +
+    ggtitle("Charges density") +
+    labs(x = "Charges", y = "Density") + 
+    geom_vline(aes(xintercept = charges_mean), color="blue", linetype="dashed", size=1) +
+      annotate("text", x = 20000, y = 0,0005, color='blue', 
+             label=paste0("Mean=", charges_mean)) +
+    geom_vline(aes(xintercept = charges_median), color ='red') +
+      annotate("text", x = 4000, y = 0,0006, color ='red', label=paste0("Median=", charges_median)) +
+    theme_bw() -> density_plot
+density_plot
+```
+
+
+```{r}
+insurance_cost %>%
+  select(c(sex, smoker, region)) %>%
+  names() -> b
+
+
+boxplot_graphs<- lapply(b,
+                          function(x){
+                            insurance_cost %>%
+                              ggplot() +
+                              geom_boxplot(aes(x = insurance_cost[[x]], y = `charges`),
+                                          color = "black", fill = "pink") +
+                              theme_grey() +
+                              ggtitle(x) +
+                              xlab(x)
+                          })
+boxplot <- ggarrange(plotlist = boxplot_graphs, nrow = 1, ncol = 1)
+
+boxplot
+```
+
+```{r}
+boxplot2 <- ggarrange(plotlist = boxplot_graphs, nrow = 1, ncol = 3, widths=c(1, 1, 2))
+
+plots_density_boxplots <- ggarrange(density_plot, boxplot2, nrow = 2, ncol = 1)
+
+plots_density_boxplots
+```
+
+```{r}
+charges_mean <- round(mean(insurance_cost$charges),1)
+charges_median <- round(median(insurance_cost$charges),1)
+
+insurance_cost %>%
+  ggplot( aes(x=charges)) +
+    geom_density(fill="lightblue", color="darkblue", alpha=0.8) +
+    ggtitle("Charges density") +
+    labs(x = "Charges", y = "Density") + 
+    geom_vline(aes(xintercept = charges_mean), color="blue", linetype="dashed", size=1) +
+      annotate("text", x = 20000, y = 0,0005, color='blue', 
+             label=paste0("Mean=", charges_mean)) +
+    geom_vline(aes(xintercept = charges_median), color ='red') +
+      annotate("text", x = 4000, y = 0,0006, color ='red', label=paste0("Median=", charges_median)) +
+    facet_grid(. ~ region) +
+    theme_bw()
+```
+
+```{r}
+insurance_cost %>%
+  ggplot(aes(x=age, y=charges)) +
+    geom_point() +
+    xlab("age") +
+    ylab("charges") +
+    ggtitle("Age + Charges") +
+    theme(axis.title.x = element_text(size=14)) +
+    theme_bw()
+
+```
+
+```{r}
+insurance_cost %>%
+  ggplot(aes(x=age, y=charges)) +
+    geom_point() +
+    geom_smooth(method=lm) +
+    xlab("age") +
+    ylab("charges") +
+    ggtitle("Age + Charges") +
+    theme(axis.title.x = element_text(size=14)) +
+    theme_bw()
+
+
+
+```
+
+```{r}
+
+insurance_cost %>%
+  ggplot(aes(x=age, y=charges)) +
+    geom_point() +
+    geom_smooth(method=lm, aes(group = smoker)) +
+    xlab("age") +
+    ylab("charges") +
+    ggtitle("Age + Charges") +
+    theme(axis.title.x = element_text(size=14)) +
+    theme_bw()
+```
+
+
+```{r}
+insurance_cost %>%
+  ggplot(aes(x=bmi, y=charges)) +
+    geom_point() +
+    geom_smooth(method=lm, aes(group = smoker)) +
+    xlab("BMI") +
+    ylab("charges") +
+    ggtitle("BMI + Charges") +
+    theme(axis.title.x = element_text(size=14)) +
+    theme_bw()
+
+
+```
+
+Вопрос: Есть ли различия в рарсходях между женщинами с детьми и без
+
+Выбор типа графика: требуется визуализировать 2 группы (по категориальной переменной) для 1 количественной переменной. С помощью density plot можно визуально оценить, одинаковое ли расходы в выбранной популяции для женщин с детьми и без
+```{r}
+insurance_cost %>%
+  filter(sex == "female") %>%
+  mutate(kids = ifelse((children > 0), 'yes', 'no')) %>%
+  ggplot() +
+  geom_density(aes(x = charges, fill = kids), 
+               alpha = 0.5)+
+  ggtitle("Charges density in women with or without children") +
+  theme_minimal()
+```
+
+ 
+ 

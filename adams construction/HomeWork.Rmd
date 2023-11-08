@@ -1,0 +1,178 @@
+---
+title: "Fam_HW1"
+output: html_document
+date: "2023-11-08"
+---
+
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(openxlsx)
+```
+
+
+```{r}
+files <- list.files(path = "./sdtm-like files/", pattern = NULL, all.files = FALSE, full.names = FALSE)
+
+AE <- read.xlsx(paste0("./sdtm-like files/", files[grepl("AE_ADVERSEEVENTS", files)][1]), na.strings = NA)
+
+terms_translation <- read.xlsx(paste0("./sdtm-like files/", files[grepl("terms_translation", files)][1]), na.strings = NA)
+```
+
+```{r}
+AE <- AE %>% 
+  mutate(AESTDTC=format(as.Date(AESTDTC, format = "%Y-%m-%d"), "%d.%m.%Y"), AEENDTC=format(as.Date(AEENDTC, format = "%Y-%m-%d"), "%d.%m.%Y"),
+         AEENTPT=format(as.Date(AEENTPT, format = "%Y-%m-%d"), "%d.%m.%Y"))
+```
+
+
+```{r}
+AE1 <- AE %>% select(!STUDYID)
+
+ADSL_AE <- left_join(ADSL, AE1, 'SUBJID')
+
+ADSL_AE%>% filter(!SUBJID == "09009")
+
+```
+```{r}
+AE1 <- ADSL_AE %>%
+select(STUDYID, SUBJID, USUBJID, SITEID, TRTSEQP, TRTSEQPN, AP01SDT, AP01EDT, AP02SDT, AP02EDT)
+```
+```{r}
+AE2 <- ADSL_AE %>%
+  select(SUBJID, AETERM, AESTDTC, AP01SDT, AP01EDT, AP02SDT, AP02EDT, TRT01P, TRT02P) %>%
+  mutate(AREPIOD = (ifelse((AESTDTC >= AP01SDT & AESTDTC <= AP01EDT), "1", ifelse((AESTDTC >= AP02SDT & AESTDTC <= AP02EDT), "2", "NA")))) %>%
+  mutate(APERIODC = case_when(AREPIOD == '1' ~ 'Период 1',
+                              AREPIOD == '2' ~ 'Период 2')) %>%
+  mutate(TRTEMFL = (ifelse((AESTDTC >= AP01SDT | AESTDTC <= AP01EDT), "Y", "NA"))) %>%
+  mutate(PREFL = (ifelse((AESTDTC < AP01SDT), "Y", "NA"))) %>%
+  mutate(TRTP = (ifelse((AREPIOD == '1'), "drug1", ifelse((AREPIOD == '2'), "drug2", "NA")))) %>%
+  mutate(TRTPN = (ifelse((AREPIOD == '1'), "1", ifelse((AREPIOD == '2'), "2", "NA")))) %>%
+  select(SUBJID, AREPIOD, APERIODC, TRTEMFL, PREFL, TRTP, TRTPN)
+
+```
+
+```{r}
+AE3 <- ADSL_AE %>%
+  select(SUBJID, AESEQ, AETERM)
+AE3
+```
+
+```{r}
+terms_translation %>% mutate(AEDECOD = PT) %>%  select(!PT) -> terms_translation2
+
+AE4 <- ADSL_AE %>%
+  select(SUBJID, AEDECOD, AEBODSYS)
+
+AE4 <- left_join(AE4, terms_translation2, 'AEDECOD')
+AE4
+
+```
+
+
+
+```{r}
+AE5 <- ADSL_AE %>%
+  select(SUBJID, AESTDTC, AEENDTC, AEENRTPT) %>%
+  mutate(AESTDTC=format(as.Date(AESTDTC, format = "%%Y-%m-%d"), "%d.%m.%Y"), 
+         ASTDT=format(as.Date(AESTDTC, format = "%Y-%m-%d"), "%d.%m.%Y"), 
+         ASTDTF=ifelse((ASTDT == "NA"), "Y", "NA"), 
+         AEENDTC=format(as.Date(AEENDTC, format = "%Y-%m-%d"), "%d.%m.%Y"), 
+         AENDT=format(as.Date(AEENDTC, format = "%Y-%m-%d"), "%d.%m.%Y"), 
+         AENDTF=ifelse((AENDT == "NA"), "Y", "NA"),
+         AEENRF=ifelse((AEENRTPT == "ONGOING"), "ONGOING", ""),
+         ADURN=as.double(as.Date(ASTDT,"%d.%m.%Y") - as.Date(AENDT,"%d.%m.%Y") + 1),
+         ADURU = "день")%>%
+  select(SUBJID,AESTDTC, ASTDT, ASTDTF, AEENDTC, AENDT, AENDTF, AEENRTPT, AEENRF, ADURN, ADURU)
+AE5
+
+```
+
+
+```{r}
+AE6 <- ADSL_AE %>%
+  select(SUBJID, AESER) %>%
+  mutate(AESER = (ifelse(AESER == "Да", "Y", "N"))) 
+AE6
+```
+
+
+
+```{r}
+AE7 <- AE2 %>%
+  select(SUBJID, PREFL, TRTEMFL) %>%
+  mutate(APHASE = (ifelse(PREFL == "Y", "Скрининг", ifelse(TRTEMFL == "Y", "Лечение", "")))) %>%
+  select(SUBJID, APHASE)
+AE7
+```
+
+
+```{r}
+AE8 <- ADSL_AE %>%
+  select(SUBJID, AESEV, AEREL) %>%
+  mutate(ASEV = case_when(AESEV == "Легкое" ~ "Легкая",
+                           AESEV == "Среднее" ~ "Средняя",
+                           AESEV == "Тяжелое" ~ "Тяжелая"), 
+         ASEVN = case_when(ASEV == "Легкая" ~ 1,
+                           ASEV == "Средняя" ~ 2,
+                           ASEV == "Тяжелая" ~ 3),
+         AERELN = case_when(AEREL == "Определенная" ~ 1,
+                           AEREL == "Вероятная" ~ 2,
+                           AEREL == "Возможная" ~ 3,
+                           AEREL == "Сомнительная" ~ 4,
+                           AEREL == "Условная" ~ 5,
+                           AEREL == "Не классифицируемая" ~ 6,
+                           AEREL == "Не связано" ~ 7),
+         RELGR1 = case_when(AEREL == "Определенная" ~ "Связано",
+                           AEREL == "Вероятная" ~ "Связано",
+                           AEREL == "Возможная" ~ "Связано",
+                           AEREL == "Сомнительная" ~ "Связано",
+                           AEREL == "Условная" ~ "Связано",
+                           AEREL == "Не классифицируемая" ~ "NA",
+                           AEREL == "Не связано" ~ "Не связано"),
+         RELGR1N = case_when(RELGR1 == "Связано" ~ 1,
+                           RELGR1 == "NA" ~ 2,
+                           RELGR1 == "Не связано" ~ 0)) %>%
+  select(SUBJID, ASEV, ASEVN, AEREL, AERELN, RELGR1, RELGR1N)
+AE8
+
+```
+
+```{r}
+AE9 <- ADSL_AE %>%
+  select(SUBJID, AEACN, AEOUT, AECONTRT, SAFFL, AGE, SEX, WEIGHTBL, RACE) %>%
+  mutate(AERES = AEOUT,
+         AERES = case_when(AERES == "Выздоровление без последствий" ~ "Выздоровление без осложнений"), 
+         AERESN = case_when(AERES == "Выздоровление без осложнений" ~ 1,
+                           AERES == "Стадия выздоровления" ~ 2,
+                           AERES == "Без изменений" ~ 3,
+                           AERES == "Выздоровление с осложнениями" ~ 4,
+                           AERES == "Смерть" ~ 5,
+                           AERES == "Не известно" ~ 6),
+         AECMFL = ifelse(AECONTRT == "Да", "Y", "N"),
+         WEIGHT = WEIGHTBL) %>%
+  select(SUBJID, AEACN, AERES, AERESN, AECMFL, SAFFL, AGE, SEX, WEIGHT, RACE)
+AE9
+```
+
+```{r}
+ADAE <- AE1
+ADAE <- left_join(ADAE, AE1, 'SUBJID')
+ADAE <- left_join(ADAE, AE2, 'SUBJID')
+ADAE <- left_join(ADAE, AE3, 'SUBJID')
+ADAE <- left_join(ADAE, AE4, 'SUBJID')
+ADAE <- left_join(ADAE, AE5, 'SUBJID')
+ADAE <- left_join(ADAE, AE6, 'SUBJID')
+ADAE <- left_join(ADAE, AE7, 'SUBJID')
+ADAE <- left_join(ADAE, AE8, 'SUBJID')
+ADAE <- left_join(ADAE, AE9, 'SUBJID')
+
+```
+
+```{r}
+write.xlsx(ADAE, "./ADAE.xlsx")
+```
+
+
+

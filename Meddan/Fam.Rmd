@@ -1,0 +1,170 @@
+---
+title: "Med_d_Fam"
+output: html_document
+date: "2023-11-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(gtsummary)
+library(tidyverse)
+library(readxl)
+library(openxlsx)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(ggpubr)
+library(nortest)
+library(skimr)
+library(flextable)
+library(pROC)
+```
+
+
+```{r}
+raw <- read.xlsx("trauma.xlsx")
+raw
+```
+
+З.1
+```{r}
+raw %>%
+  separate(Height, into = c("Height", "for delete"), sep = '"') %>% select(!c("for delete", "X1")) %>% 
+  mutate(Height = Height %>% as.numeric(),
+        id = id %>% as.factor()) -> meddata
+
+meddata %>% 
+  select(!c(id, Name)) %>%
+  tbl_summary() -> char
+
+char
+
+```
+```{r}
+meddata %>%
+  select(Sex, Hb) %>%
+  filter(Sex == "Female") %>%
+  mutate(Hb_lvl_F = (ifelse(Hb <12, "Low", ifelse(Hb > 14, "High", "Norm")))) %>%
+  count(Hb_lvl_F, name = "nF") %>%
+  filter(Hb_lvl_F == "Low") -> Hb_F
+
+meddata %>%
+  select(Sex, Hb) %>%
+  filter(Sex == "Male") %>%
+  mutate(Hb_lvl_M = (ifelse(Hb <13.5, "Low", ifelse(Hb > 16, "High", "Norm")))) %>%
+  count(Hb_lvl_M, name = "nM") %>%
+  filter(Hb_lvl_M == "Low") -> Hb_M
+
+meddata %>%
+  count(Sex) %>% 
+  mutate(n = n %>% as.numeric()) %>%
+  select(n) %>%
+  sum() -> nAll
+
+cbind(Hb_F, Hb_M) %>%
+  mutate("Absolute frequeancy All" = nF + nM %>% as.numeric()) %>%
+  mutate("Relative frequeancy All" = ((nF + nM)/nAll) %>% round(4) %>% `*` (100) %>% str_c("%")) %>%
+  rename("Absolute frequeancy Female" = "nF") %>% 
+  rename("Absolute frequeancy Male" = "nM") %>%
+  rename("Hb level" = "Hb_lvl_F") %>%
+  select(!"Hb_lvl_M") %>%
+  flextable() -> Hb_low
+Hb_low
+```
+З.2
+
+```{r}
+meddata %>%
+  mutate(Height_m = Height*2.54/100, 
+         Weight_kg = Weight/2.2,
+         BMI = Weight_kg/Height_m^2,
+         BMI = BMI %>% as.numeric()) -> BMI
+
+BMI %>%
+  select(BMI) %>%
+  count() %>%
+  mutate(n_BMI = n %>% as.numeric()) %>%
+  select(!n)-> overal
+
+BMI %>%
+  select(BMI) %>%
+  filter(BMI > 30) %>%
+  count() %>%
+  mutate(BMI_high = n %>% as.numeric()) %>%
+  select(!n) -> BMI_high
+
+cbind(overal, BMI_high) -> BMI
+
+BMI %>%
+  mutate(BMI_high_proc = (BMI_high/n_BMI*100) %>% round(2) %>% paste0("%")) %>%
+  mutate(BMI_mean = mean(BMI$BMI),
+         SD = sd(BMI$BMI)) %>%
+  flextable() -> BMI
+BMI
+# ~ 7 % имели ожирение
+```
+З.3
+```{r}
+roc <- roc(Death ~ Hb, 
+                   data = meddata,
+                   ci = T)
+
+roc %>% 
+    ggroc() + 
+    theme_bw()
+#Кривая показывает, что показатель гемоглобин не лучшим огбразом предсказывает настубелние летального исхода в течние 24 часов
+```
+
+З.4
+```{r}
+Results <- data.frame(AUC = roc$ci[2], 
+          AUC_LCL = roc$ci[1],
+          AUC_UCL = roc$ci[3])
+Results
+# S под кривой 0.701
+# 95%  двусторонний ДИ равен: 0.669-0.732
+```
+
+З.5
+```{r}
+roc2 <- roc(Death ~ GSC, 
+                   data = meddata,
+                   ci = T)
+roc2
+
+roc2 %>% coords(x = "best", best.method = "closest.topleft") 
+#Оптимальный порог - 7.5, при этом пороге чувствительность равна 85,57%, а специфичность - 80,81%
+```
+
+3.6
+
+```{r}
+meddata %>%
+  mutate(Height_m = Height*2.54/100, 
+         Weight_kg = Weight/2.2,
+         BMI = Weight_kg/Height_m^2,
+         BMI = BMI %>% as.numeric()) -> BMI
+BMI %>% 
+    select("Age", "Height", "Weight", "SBP", "DBP", "FOUR", "GSC", "Hb", "BMI", "Death") %>% 
+    pivot_longer(cols = !Death) %>% 
+    
+    group_by(name) %>% 
+    
+    summarise(AUC = roc(Death, value, ci = T)$ci[2] %>% round(3),
+              AUC_LCL = roc(Death, value, ci = T)$ci[1] %>% round(3),
+              AUC_UCL = roc(Death, value, ci = T)$ci[3] %>% round(3))
+
+#Наибольшей площадью под ROC-кривой обладает показатель FOUR, наименьшую - Height. Чем выше площадь под ROC-кривой, тем лучше признак (количественный) позволяет диагностировать биномиальный признак, т.е. хорошо предсказывает вероятность летального исхода в течение 24 часов
+```
+```
+
+
+
+
+
+
+
+

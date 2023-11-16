@@ -1,0 +1,181 @@
+---
+title: "HW2_Fam"
+output: html_document
+date: "2023-11-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+
+```{r}
+library(skimr)
+library(flextable)
+library(ggbeeswarm)
+library(rstatix)
+library(corrplot)
+library(corrr)
+library(GGally)
+library(factoextra)
+library(pheatmap)
+library(embed)
+library(FactoMineR)
+library(tidyverse)
+library(readxl)
+library(openxlsx)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(ggpubr)
+library(devtools)
+install_github("vqv/ggbiplot")
+```
+
+#1
+```{r}
+data <- readRDS("life_expectancy_data.RDS")
+data %>%
+  glimpse()
+```
+#2
+```{r}
+plot_ly(
+  d = data[(data$`Life expectancy`!= 0) & (data$`Mortality caused by road traffic injury` != 0),],
+  x = ~ `Urban population`,
+  y = ~ `Mortality caused by road traffic injury`,
+  color = ~continent,
+  marker = list(
+    size = 9,
+    line = list(color = 'rgba(152, 0, 0, .6)', 
+                width = 1)
+  )
+)   %>%
+  layout(
+    title = 'Отношение населения в городе и сметрностью от аварий',
+    yaxis = list(title = 'Население в городе',
+                 zeroline = FALSE),  
+    xaxis = list(title = 'Смертность от аварий',
+                 zeroline = FALSE)) 
+```
+
+#3
+```{r}
+data %>%
+  select('Life expectancy', 'continent') %>%
+  filter(continent == "Africa" | continent == "Americas") -> data_life
+
+t_test(data = data_life, formula = `Life expectancy` ~ continent)
+stat.test <- data_life %>%
+  group_by(continent) %>%
+  t_test(data = data_life, formula = `Life expectancy` ~ continent) %>%
+  adjust_pvalue(method = "bonferroni") %>%
+  add_significance("p.adj")
+stat.test
+
+bxp <- ggboxplot(
+  data_life, y = "Life expectancy", x = "continent", 
+  palette = c("#00AFBB", "#E7B800")
+  )
+
+stat.test <- stat.test %>%
+  add_xy_position(x = "Life expectancy", dodge = 0.8)
+bxp + stat_pvalue_manual(
+  stat.test,  label = "p", tip.length = 0
+  )
+```
+#4
+```{r}
+data2 <- data %>% select(!Year) %>% select(where(is.numeric))
+
+data_cor <- cor(data2)
+
+corrplot(data_cor, method = 'color', type = "lower")
+
+data_cor %>% 
+  rplot()
+```
+#5
+```{r}
+data3 <- scale(data2)
+
+data4 <- dist(data3, 
+                        method = "euclidean"
+                        )
+as.matrix(data4)[1:6,1:6]
+
+data5 <- hclust(d = data4, 
+                        method = "ward.D2")
+
+fviz_dend(data5, 
+          cex = 0.1) 
+
+
+```
+#6
+```{r}
+pheatmap(data3, 
+         show_rownames = FALSE, 
+         clustering_distance_rows = data4,
+         clustering_method = "ward.D2", 
+         cutree_rows = 10,
+         cutree_cols = length(colnames(data3)),
+         angle_col = 45, 
+         main = "clustering rows and columns with heatmap")
+
+```
+
+#7
+```{r}
+data_full <- prcomp(data3, 
+                    scale = T)
+summary(data_full)
+#Cumulative Proportion - PC1, PC2 и PC3 чуть больше 60%, для первых двух - 51, не слишком хороший результат
+```
+```{r}
+fviz_eig(data_full, addlabels = T, ylim = c(0, 40))
+#Выдел 1-я комп - 39,9%
+```
+```{r}
+fviz_pca_var(data_full, col.var = "contrib")
+fviz_pca_var(data_full, 
+             select.var = list(contrib = 8), 
+             col.var = "contrib")
+fviz_contrib(data_full, choice = "var", axes = 1, top = 24) 
+fviz_contrib(data_full, choice = "var", axes = 2, top = 24) 
+fviz_contrib(data_full, choice = "var", axes = 3, top = 24)
+#PC1 много переменных, основных - 4
+#PC2 составляют в первую очередь переменные иммунизаций
+#PC3 состоит из GDP и GNI 
+```
+
+#8
+```{r}
+ggbiplot::ggbiplot(data_full, 
+         scale=0, alpha = 0.1, varname.size = 4, groups = data$continent, labels = data$Country, labels.size = 1, ellipse = T) + 
+  theme_minimal() -> PCA_biplot
+ggplotly(PCA_biplot, tooltip = c("groups", "labels"))
+```
+#9
+```{r}
+#Существует 3 основных компонента. Первый компонент включает в себя сразу несколько различных показателей (основной из них - ожидаемая продолжительность жизни), второй - показатели иммунизации (они хорошо коррелируют), третий компонент состоит из ВВП и ВНД, и они сильно коррелируют, хотя их вклад заметно меньше, чем у других переменных (за исключением самоубийств, безработицы и лечение туберкулеза) Такие показатели, как городское и сельское население, противоположно направлены, но вносят одинаковый вклад. В то же время показатель на душу населения в расчете на столицу совпадает с показателем городского населения в этом направлении, но вносит несколько меньший вклад.
+
+```
+#10
+```{r}
+umap <- recipe(~., data = data2) %>% 
+  step_normalize(all_predictors()) %>% 
+  step_umap(all_predictors()) %>% 
+  prep() %>% 
+  juice() 
+umap2 <- cbind(umap, data)
+
+umap2 %>%
+  ggplot(aes(UMAP1, UMAP2)) + 
+  geom_point(aes(color = continent,
+             alpha = 0.6, size = 2)) +
+  labs(color = NULL)
+#В UMAP прослеживается тенденция, что данные внутри региона близки друг к другу, потому на получившемся графике точки группируются по регионам
+```
+
+
